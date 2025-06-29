@@ -1,38 +1,39 @@
 package com.example.microventa.service;
 
+import com.example.microventa.client.ProductoClient;
+import com.example.microventa.config.RabbitMQConfig;
+import com.example.microventa.model.DetalleVenta;
 import com.example.microventa.model.Venta;
-import com.example.microventa.repository.VentaRepository;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.stereotype.Service;
-import com.example.microventa.config.RabbitMQConfig;
 
 import java.util.List;
 
 @Service
 public class VentaService {
 
-    private final VentaRepository ventaRepository;
     private final RabbitTemplate rabbitTemplate;
+    private final ProductoClient productoClient;
 
-    public VentaService(VentaRepository ventaRepository, RabbitTemplate rabbitTemplate) {
-        this.ventaRepository = ventaRepository;
+    public VentaService(RabbitTemplate rabbitTemplate, ProductoClient productoClient) {
         this.rabbitTemplate = rabbitTemplate;
+        this.productoClient = productoClient;
     }
 
     public Venta registrarVenta(Venta venta) {
-        venta.getDetalles().forEach(det -> det.setVenta(venta));
-        Venta ventaGuardada = ventaRepository.save(venta);
+        for (DetalleVenta detalle : venta.getDetalles()) {
+            productoClient.descontarStock(detalle.getProductoId(), detalle.getCantidad());
+        }
 
         rabbitTemplate.convertAndSend(
-                "", // Cola directa
-                RabbitMQConfig.VENTAS_QUEUE,
-                ventaGuardada
+            "",
+            RabbitMQConfig.VENTAS_QUEUE,
+            venta
         );
-
-        return ventaGuardada;
+        return venta;
     }
 
     public List<Venta> listarVentas() {
-        return ventaRepository.findAll();
+        return List.of();
     }
 }
